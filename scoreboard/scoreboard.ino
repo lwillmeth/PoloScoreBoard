@@ -7,110 +7,127 @@
  * LEDs attached to each of the outputs of the shift register
 
  */
-#define LATCHPIN 8      //Pin connected to ST_CP of 74HC595
+#define LATCHPIN 13      //Pin connected to ST_CP of 74HC595
 #define CLOCKPIN 12     //Pin connected to SH_CP of 74HC595
 #define DATAPIN 11      //Pin connected to DS of 74HC595
-#define DEFAULTLED 13   //Use default led on pin 13 for troubleshooting
 #define DEBOUNCE 500    // Min delay between button presses
+#define REDBUTTON 10
+#define BLUEBUTTON 9
 
 //holders for infromation you're going to pass to shifting function
-byte leftScore;
-byte dataArray[10];
+byte redScore, blueScore;
+byte digits[10];
 
-//Buttons
-const byte ButtonLeftPin = 2;
-const byte ButtonRightPin = 3;
 
 // prevent button debounce
-long prevLeftPress = millis();
+long gameTimer, prevRedPress, prevBluePress;
 
 void setup() {
   //set pins to output because they are addressed in the main loop
   pinMode(LATCHPIN, OUTPUT);
-  pinMode(DEFAULTLED, OUTPUT);
-  pinMode(ButtonLeftPin, INPUT_PULLUP);
-//  pinMode(ButtonLeftPin, INPUT_PULLUP);
-//  attachInterrupt(digitalPinToInterrupt(ButtonLeftPin), incLeftScore, FALLING);
+  pinMode(CLOCKPIN, OUTPUT);
+  pinMode(DATAPIN, OUTPUT);
+  pinMode(REDBUTTON, INPUT_PULLUP);
+  pinMode(BLUEBUTTON, INPUT_PULLUP);
+
+  digitalWrite(LATCHPIN, LOW);
+  digitalWrite(CLOCKPIN, LOW);
+  digitalWrite(DATAPIN, LOW);
+
   Serial.begin(9600);
+  Serial.println("Bike polo scoreboard starting up..");
 
   // The binary patterns for each decimal digit
-  dataArray[0] = 0b01111110;
-  dataArray[1] = 0b00001100;
-  dataArray[2] = 0b00110111;
-  dataArray[3] = 0b00011111;
-  dataArray[4] = 0b01001101;
-  dataArray[5] = 0b01011011;
-  dataArray[6] = 0b01111011;
-  dataArray[7] = 0b00001110;
-  dataArray[8] = 0b01111111;
-  dataArray[9] = 0b01011111;
+  digits[0] = 0b11111110;
+  digits[1] = 0b00001100;
+  digits[2] = 0b01110111;
+  digits[3] = 0b00111111;
+  digits[4] = 0b10001101;
+  digits[5] = 0b10111011;
+  digits[6] = 0b11111011;
+  digits[7] = 0b00001110;
+  digits[8] = 0b11111111;
+  digits[9] = 0b10111111;
+
+  // Reset game scores
+  redScore = 0;
+  blueScore = 0;
+
+  // Reset button timers
+  prevRedPress = millis();
+  prevBluePress = prevBluePress;
+  gameTimer = prevBluePress;
 
   // all on for 1 second
-  shiftOut(0x00);
+  pushLED(0xFF);
   delay(1000);
-
-  leftScore = 0;
+  pushLED(redScore);
+  //pushLED(blueScore);
 }
 
 void loop() {
-/*
+
   // Check if left button is being pressed
-  if(prevLeftPress + DEBOUNCE < millis() && !digitalRead(ButtonLeftPin)){
-    leftScore = (leftScore + 1) % 10; // increment 1, range is 0-9 inc
-    Serial.println(leftScore);
-    prevLeftPress = millis();
+  if(prevRedPress + DEBOUNCE < millis() && !digitalRead(REDBUTTON)){
+    redScore = (redScore + 1) % 10; // increment 1, range is 0-9 inc
+    if(redScore==0x00 && blueScore==0x00){
+      // If both teams change to a zero score, reset the game.
+      // all on for 1 second
+      pushLED(0xFF);
+      delay(1000);
+      // all off for 1 second
+      pushLED(0x00);
+      delay(1000);
+    }
+    // Either way, push the new scores
+    Serial.println(redScore);
+    pushLED(redScore);
+    //pushLED(blueScore);
+    // reset red button timer
+    prevRedPress = millis();
   }
 
-  digitalWrite(LATCHPIN, 0);
-  shiftOut(DATAPIN, CLOCKPIN, leftScore);
-  digitalWrite(LATCHPIN, 1);
-  delay(100);
-*/
-
-  for (int j = 0; j < 10; j++) {
-    shiftOut(dataArray[j]);
-    delay(1000);
+  // Blink scoreboard when game time runs out
+  if(millis() - gameTimer > 900000){
+    // 15 minute games, after that blink the scores every half second
+    if(millis() % 1000 > 500){
+      pushLED(0x00);
+    } else {
+      pushLED(redScore);
+      //pushLED(blueScore);
+    }
   }
 
-  // All off for 3 seconds
-  shiftOut(0x00);
-  delay(3000);
+//  for (int j = 0; j < 10; j++) {
+//    pushLED(digits[j]);
+//    delay(1000);
+//  }
+//
+//  // All off for 3 seconds
+//  pushLED(0x00);
+//  delay(1500);
+//  pushLED(0xFF);
+//  delay(1500);
 }
 
 /*
-void incLeftScore(){
+void incredScore(){
     data = (data + 1) % 10; // increment 1, range is 0-9 inc
     Serial.println(data);
 }
 */
 
 
-void shiftOut(byte score) {
+void pushLED(byte score) {
+  Serial.println(score);
   digitalWrite(LATCHPIN, 0);
-  
-  //NOTICE THAT WE ARE COUNTING DOWN in our for loop
-  //This means that %00000001 or "1" will go through such
-  //that it will be pin Q0 that lights. 
-  for (byte i=7; i>=0; i--)  {
+  //NOTICE WE ARE COUNTING DOWN
+  for (int i=7; i>=0; i--){
+    digitalWrite(DATAPIN, score & (1<<i));
+    //register shifts bits on upstroke of clock pin
     digitalWrite(CLOCKPIN, 0);
-
-    //if the value passed to score and a bitmask result 
-    // true then... so if we are at i=6 and our value is
-    // %11010100 it would the code compares it to %01000000 
-    // and proceeds to set pinState to 1.
-//    if ( score & (1<<i) ) {
-//      pinState= 1;
-//    }
-//    else {  
-//      pinState= 0;
-//    }
-
-    //Sets the pin to HIGH or LOW depending on pinState
-    digitalWrite(DATAPIN, (score & (1<<i))?1:0);
-    //register shifts bits on upstroke of clock pin  
     digitalWrite(CLOCKPIN, 1);
   }
-
   //stop shifting
   digitalWrite(LATCHPIN, 1);
 }
